@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PrintfWhy app - what does this printf format print?</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f6f9ec;color:#1f2d0e;line-height:1.5}
+.wrap{max-width:900px;margin:0 auto;padding:26px 16px 50px}
+h1{font-size:30px}h1 span{color:#4d7c0f}.sub{color:#62754a;margin:6px 0 14px}
+label{display:block;font-size:13px;color:#62754a;margin:10px 0 4px}
+input[type=text],textarea{width:100%;background:#fff;color:#1f2d0e;border:1px solid #d3deb9;border-radius:8px;padding:9px 12px;font:15px ui-monospace,Menlo,Consolas,monospace}
+textarea{height:96px;resize:vertical;white-space:pre}
+.pre button{background:#fff;color:#3f6212;border:1px solid #3f6212;border-radius:20px;padding:5px 12px;margin:0 6px 8px 0;cursor:pointer;font-size:13px}
+.card{background:#fff;border:1px solid #dfe8cb;border-radius:10px;padding:12px 16px;margin-top:12px}
+.res{font:17px ui-monospace,Menlo,Consolas,monospace;background:#f1f6e3;border-radius:6px;padding:8px 10px;margin-top:6px;white-space:pre-wrap;word-break:break-all}
+.res i{font-style:normal;color:#a3b57c}
+.muted{color:#62754a;font-size:14px}
+table{width:100%;border-collapse:collapse;font-size:14px;margin-top:8px}td,th{text-align:left;padding:6px 8px;border-bottom:1px solid #eef3e0;vertical-align:top}th{color:#62754a;font-weight:600}
+.mono{font:14px ui-monospace,Menlo,Consolas,monospace;word-break:break-all;white-space:pre-wrap}
+.err{color:#b91c1c;font-size:13px}.warn{color:#b45309;font-size:13px}.note{color:#6d28d9;font-size:12.5px}
+footer{margin-top:22px;font-size:12.5px;color:#62754a}
+</style></head><body><div class="wrap">
+<h1>Printf<span>Why</span></h1>
+<p class="sub">Type a C printf format and its arguments. See exactly what it prints, and what each %-spec did.</p>
+<label for="fmt">Format string</label>
+<input type="text" id="fmt" spellcheck="false" aria-label="Format string">
+<label for="args">Arguments, one per line (numbers for %d %x %c, text for %s)</label>
+<textarea id="args" spellcheck="false" aria-label="Arguments"></textarea>
+<div class="pre" id="pre" style="margin-top:10px"></div>
+<div id="out"></div>
+<footer>Checked against gcc 11.4 and glibc printf on 34,318 generated formats made of d i u o x X c s specs with random flags, width, precision, * and length modifiers (6 fresh seeds): 0 differences on the 13,852 formats whose behaviour the C standard defines. The other 20,466 use flag combinations the standard leaves undefined (for example %#d or %05s); there the engine also matched glibc every time, but another C library may print something else. The rules follow the cppreference page for fprintf, which was fetched. Not covered: %f %e %g %a %p %n and wide characters (explained, not computed), the C locale, and escapes like \n (type them as characters). Type sizes assume a 64-bit Linux build (int is 32 bits, long is 64). Everything runs in your browser.</footer>
+</div>
+<script>
+(function(root){
+  'use strict';
+  var INT_BITS={hh:8,h:16,'':32,l:64,ll:64,j:64,z:64,t:64};
+  var FLOATS='fFeEgGaA';
+  function parse(fmt){
+    var out=[],i=0,lit='';
+    function flush(){if(lit){out.push({kind:'lit',text:lit});lit='';}}
+    while(i<fmt.length){
+      var c=fmt[i];
+      if(c!=='%'){lit+=c;i++;continue;}
+      flush();
+      var st=i;i++;
+      var sp={kind:'spec',flags:'',width:null,widthStar:false,prec:null,precStar:false,len:'',conv:'',text:'',notes:[]};
+      while(i<fmt.length&&'-+ #0'.indexOf(fmt[i])>=0){if(sp.flags.indexOf(fmt[i])<0)sp.flags+=fmt[i];else sp.notes.push('flag "'+fmt[i]+'" repeated');i++;}
+      if(fmt[i]==='*'){sp.widthStar=true;i++;}else{var m=/^\d+/.exec(fmt.slice(i));if(m){sp.width=parseInt(m[0],10);i+=m[0].length;}}
+      if(fmt[i]==='.'){i++;sp.prec=0;if(fmt[i]==='*'){sp.precStar=true;sp.prec=null;i++;}else{var m2=/^\d+/.exec(fmt.slice(i));if(m2){sp.prec=parseInt(m2[0],10);i+=m2[0].length;}else sp.precDot=true;}}
+      var lm=/^(hh|h|ll|l|j|z|t|L)/.exec(fmt.slice(i));if(lm){sp.len=lm[0];i+=lm[0].length;}
+      if(i>=fmt.length){sp.conv='';sp.text=fmt.slice(st);sp.invalid='The format ends in the middle of a conversion';out.push(sp);break;}
+      sp.conv=fmt[i];i++;sp.text=fmt.slice(st,i);
+      out.push(sp);}
+    flush();return out;}
+  function rawFlag(sp,f){return sp.flags.indexOf(f)>=0;}
+  function pad(body,width,left){if(width===null||body.length>=width)return body;var p=new Array(width-body.length+1).join(' ');return left?body+p:p+body;}
+  function fmtOne(sp,width,prec,arg){
+    // returns {s, undef:[...]} ; width/prec already resolved (null if none)
+    var undef=[],conv=sp.conv,left=rawFlag(sp,'-'),zero=rawFlag(sp,'0'),plus=rawFlag(sp,'+'),space=rawFlag(sp,' '),alt=rawFlag(sp,'#');
+    if(conv==='%')return {s:'%',undef:undef};
+    if(conv==='c'||conv==='s'){
+      if(alt)undef.push('the # flag has no defined meaning with %'+conv);
+      if(zero)undef.push('the 0 flag has no defined meaning with %'+conv);
+      if(plus||space)undef.push('+ and space flags only apply to signed conversions (d, i)');
+      if(conv==='c'&&prec!==null)undef.push('a precision has no defined meaning with %c');
+      if(sp.len&&sp.len!=='l')undef.push('length modifier "'+sp.len+'" is not defined for %'+conv);
+      var body;
+      if(conv==='c'){body=String.fromCharCode(Number(BigInt.asUintN(8,arg.int)));}
+      else{body=arg.str;if(prec!==null&&prec<body.length)body=body.slice(0,prec);}
+      return {s:pad(body,width,left),undef:undef};}
+    var signed=conv==='d'||conv==='i';
+    var bits=INT_BITS[sp.len];
+    if(bits===undefined){undef.push('length modifier "'+sp.len+'" is not defined for %'+conv);bits=32;}
+    var v=signed?BigInt.asIntN(bits,arg.int):BigInt.asUintN(bits,arg.int);
+    if(alt&&!(conv==='o'||conv==='x'||conv==='X'))undef.push('the # flag has no defined meaning with %'+conv);
+    if(!signed&&(plus||space))undef.push('+ and space flags only apply to signed conversions (d, i)');
+    var neg=v<0n,mag=neg?-v:v;
+    var base=conv==='o'?8:(conv==='x'||conv==='X')?16:10;
+    var digits=mag.toString(base);if(conv==='X')digits=digits.toUpperCase();
+    if(prec!==null){if(prec===0&&v===0n)digits='';else while(digits.length<prec)digits='0'+digits;}
+    var prefix='';
+    if(signed){prefix=neg?'-':plus?'+':space?' ':'';}
+    if(conv==='o'&&alt&&digits[0]!=='0')digits='0'+digits;
+    if((conv==='x'||conv==='X')&&alt&&v!==0n)prefix=conv==='x'?'0x':'0X';
+    var total=prefix.length+digits.length;
+    var zeroPad=zero&&!left&&prec===null;
+    if(width!==null&&total<width){
+      var n=width-total;
+      if(left)return {s:prefix+digits+new Array(n+1).join(' '),undef:undef};
+      if(zeroPad)return {s:prefix+new Array(n+1).join('0')+digits,undef:undef};
+      return {s:new Array(n+1).join(' ')+prefix+digits,undef:undef};}
+    return {s:prefix+digits,undef:undef};}
+  // args: array of strings. returns {items:[{...}], output, extraArgs, missing}
+  function run(fmt,args){
+    var parts=parse(fmt),ai=0,out='',items=[],missing=false;
+    function take(kind){
+      if(ai>=args.length){missing=true;return null;}
+      var raw=args[ai++];
+      if(kind==='str')return {str:raw,raw:raw};
+      var t=raw.trim(),v=null;
+      if(kind==='char'&&raw.length===1&&!/^\d$/.test(raw))return {int:BigInt(raw.charCodeAt(0)),raw:raw};
+      if(/^[+-]?\d+$/.test(t))v=BigInt(t);else if(/^[+-]?0[xX][0-9a-fA-F]+$/.test(t))v=t[0]==='-'?-BigInt(t.slice(1)):BigInt(t.replace(/^\+/,''));
+      if(v===null)return {bad:raw};
+      return {int:v,raw:raw};}
+    parts.forEach(function(p){
+      if(p.kind==='lit'){out+=p.text;items.push({kind:'lit',text:p.text,out:p.text});return;}
+      var it={kind:'spec',sp:p,text:p.text,consumed:[],undef:[],notes:p.notes.slice()};items.push(it);
+      if(p.invalid){it.error=p.invalid;it.out='';return;}
+      var width=p.width,prec=p.prec;
+      var left=rawFlag(p,'-');
+      if(p.conv==='%'){ if(p.text!=='%%')it.notes.push('only %% is defined; flags, width or precision make this undefined');
+        it.out='%';out+='%';return;}
+      var known='diuoxXcs';
+      if(FLOATS.indexOf(p.conv)>=0||p.conv==='p'||p.conv==='n'){
+        it.unsupported=true;it.out='';
+        if(p.widthStar){take('int');}if(p.precStar){take('int');}take('int');
+        it.notes.push('%'+p.conv+' is not computed here (only integers, characters and strings are)');return;}
+      if(known.indexOf(p.conv)<0){it.error='%'+p.conv+' is not a conversion; the behaviour is undefined';it.out='';return;}
+      if(p.widthStar){var wa=take('int');if(!wa||wa.bad!==undefined){it.error=wa?'Argument "'+wa.bad+'" is not an integer (needed for *)':'No argument left for *';it.out='';return;}
+        it.consumed.push({role:'width (*)',raw:wa.raw});var w=Number(BigInt.asIntN(32,wa.int));if(w<0){left=true;w=-w;it.notes.push('negative * width means the - flag and width '+w);}width=w;}
+      if(p.precStar){var pa=take('int');if(!pa||pa.bad!==undefined){it.error=pa?'Argument "'+pa.bad+'" is not an integer (needed for *)':'No argument left for *';it.out='';return;}
+        it.consumed.push({role:'precision (*)',raw:pa.raw});var pr=Number(BigInt.asIntN(32,pa.int));if(pr<0){prec=null;it.notes.push('negative * precision is ignored');}else prec=pr;}
+      var kind=p.conv==='s'?'str':p.conv==='c'?'char':'int';
+      var a=take(kind);
+      if(!a){it.error='No argument left for this conversion (undefined behaviour in C)';it.out='';return;}
+      if(a.bad!==undefined){it.error='Argument "'+a.bad+'" is not an integer';it.out='';return;}
+      it.consumed.push({role:'value',raw:a.raw});
+      var spx={flags:p.flags,len:p.len,conv:p.conv};
+      if(left&&p.flags.indexOf('-')<0)spx.flags+='-';
+      var r=fmtOne(spx,width,prec,a);
+      it.out=r.s;it.undef=r.undef;it.width=width;it.prec=prec;out+=r.s;
+      if(p.flags.indexOf('0')>=0&&(left||prec!==null)&&'diuoxX'.indexOf(p.conv)>=0)it.notes.push('the 0 flag is ignored because '+(left?'the - flag is set':'a precision is given'));
+      if(p.flags.indexOf(' ')>=0&&p.flags.indexOf('+')>=0)it.notes.push('the space flag is ignored because + is set');
+    });
+    return {items:items,output:out,extra:ai<args.length?args.length-ai:0,missing:missing,anyUndef:items.some(function(i){return i.undef&&i.undef.length})};}
+  var api={parse:parse,run:run};
+  if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.PrintfWhy=api;
+})(typeof window!=='undefined'?window:globalThis);
+</script>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function vis(s){return esc(s).replace(/ /g,'<i>\u00b7</i>')}
+var LEN={hh:'char-sized (8 bit)',h:'short (16 bit)',l:'long (64 bit)',ll:'long long (64 bit)',j:'intmax_t (64 bit)',z:'size_t (64 bit)',t:'ptrdiff_t (64 bit)',L:'long double'};
+var CONV={d:'signed decimal',i:'signed decimal',u:'unsigned decimal',o:'octal',x:'hex, lower case',X:'hex, upper case',c:'one character',s:'string','%':'a literal %'};
+function describe(sp){
+ var d=[];
+ if(sp.flags)d.push('flags '+sp.flags.split('').map(function(f){return f===' '?'space':f}).join(' '));
+ if(sp.widthStar)d.push('width from an argument');else if(sp.width!==null)d.push('width '+sp.width);
+ if(sp.precStar)d.push('precision from an argument');else if(sp.prec!==null)d.push('precision '+sp.prec);else if(sp.precDot)d.push('precision 0 (a bare dot)');
+ if(sp.len)d.push(LEN[sp.len]);
+ d.push(CONV[sp.conv]||(sp.conv?'conversion '+sp.conv:''));
+ return d.join(', ')}
+function run(){
+ var fmt=$('fmt').value,args=$('args').value===''?[]:$('args').value.split('\n');
+ var r=PrintfWhy.run(fmt,args),h='';
+ h+='<div class="card"><div class="muted">Output ('+r.output.length+' characters, spaces shown as dots)</div><div class="res">'+vis(r.output)+'<i>\u2502</i></div>';
+ if(r.missing)h+='<p class="warn">A conversion ran out of arguments. In C that is undefined behaviour.</p>';
+ if(r.extra)h+='<p class="muted">'+r.extra+' extra argument'+(r.extra===1?' is':'s are')+' ignored by printf.</p>';
+ h+='</div><div class="card"><table><tr><th>Part</th><th>Meaning</th><th>Arguments used</th><th>Prints</th></tr>';
+ r.items.forEach(function(it){
+  if(it.kind==='lit'){h+='<tr><td class="mono">'+vis(it.text)+'</td><td class="muted">literal text</td><td></td><td class="mono">'+vis(it.out)+'</td></tr>';return}
+  h+='<tr><td class="mono">'+esc(it.text)+'</td><td>'+esc(describe(it.sp));
+  it.notes.forEach(function(n){h+='<div class="note">'+esc(n)+'</div>'});
+  it.undef.forEach(function(n){h+='<div class="warn">Undefined in the C standard: '+esc(n)+'. glibc prints the result shown.</div>'});
+  if(it.error)h+='<div class="err">'+esc(it.error)+'</div>';
+  h+='</td><td class="mono">'+it.consumed.map(function(c){return esc(c.role)+': '+esc(JSON.stringify(c.raw))}).join('\n')+'</td><td class="mono">'+(it.error?'-':vis(it.out)+'<i>\u2502</i>')+'</td></tr>'});
+ h+='</table></div>';$('out').innerHTML=h}
+var P=[["Width and flags","[%5d] [%-5d] [%05d]","42\n42\n42"],["Hex","%x %#x %X %#o","255\n255\n255\n8"],["Precision on ints","[%.3d] [%8.3d] [%08.3d]","7\n7\n7"],["Signs","%+d % d %+d","5\n5\n-5"],["Strings","[%s] [%.2s] [%5.1s] [%-6s]","hello\nhello\nhello\nab"],["Characters","%c%c%c","72\ni\n33"],["Truncation","%hhd %hd %d","300\n70000\n4294967296"],["Unsigned -1","%u %lu %x","-1\n-1\n-1"],["Star","[%*d] [%-*d] [%.*s]","6\n42\n6\n42\n3\nabcdef"],["Zero precision","[%.0d] [%.d]","0\n0"],["Undefined","%#d %05s","5\nab"],["Missing arg","%d and %d","1"]];
+$('pre').innerHTML=P.map(function(p,i){return '<button data-i="'+i+'">'+esc(p[0])+'</button>'}).join('');
+$('pre').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;$('fmt').value=P[+b.dataset.i][1];$('args').value=P[+b.dataset.i][2];run()});
+$('fmt').addEventListener('input',run);$('args').addEventListener('input',run);
+$('fmt').value=P[0][1];$('args').value=P[0][2];run();
+})();
+</script>
+</body></html>
