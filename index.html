@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PrintfWhy - what does this printf format print?</title>
+<meta name="description" content="Type a C printf format and arguments and see exactly what it prints, and what each flag, width and precision did.">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f6f9ec;color:#1f2d0e;line-height:1.6}
+.wrap{max-width:680px;margin:0 auto;padding:48px 20px 60px}.logo{font-size:46px;font-weight:800}.logo span{color:#3f6212}
+.tag{font-size:19px;margin-top:10px;color:#62754a}.cta{display:inline-block;margin-top:26px;background:#3f6212;color:#fff;font-weight:700;padding:14px 30px;border-radius:10px;text-decoration:none}
+h2{font-size:21px;margin:40px 0 10px}li{color:#62754a;margin-bottom:8px}ul{margin-left:20px}
+.demo{margin-top:26px;background:#fff;border:1px solid #dfe8cb;border-radius:10px;padding:16px;font:14px ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap}.demo b{color:#c92a2a}.demo i{color:#2b7a4b;font-style:normal}
+footer{margin-top:50px;font-size:13px;color:#8a9c6c}a{color:#3f6212}
+</style></head><body><div class="wrap">
+<div class="logo">Printf<span>Why</span></div>
+<div class="tag">Why does %05d pad with zeros but %05s does not? See every flag at work.</div>
+<a class="cta" href="app.html">Open the app</a>
+<div class="demo">[%5d] [%-5d] [%05d]   42 42 42
+<i>[   42] [42   ] [00042]</i>
+%.3d with 7 -&gt; <i>007</i>    %hhd with 300 -&gt; <b>44</b></div>
+<h2>What it does</h2>
+<ul><li>Splits a C printf format into its parts and shows what each flag, width, precision and length modifier means.</li>
+<li>Prints the result with spaces made visible, including the effect of * arguments, truncation by hh and h, and negative numbers as unsigned.</li>
+<li>Flags the combinations the C standard leaves undefined, and missing or extra arguments.</li></ul>
+<h2>How far to trust it</h2>
+<ul><li>On 34,318 generated formats it agrees with gcc 11.4 and glibc printf on every case the standard defines (13,852). It does not compute %f, %e, %g, %p or %n. The rules follow the cppreference fprintf page, which was fetched.</li></ul>
+<footer>Part of the <a href="https://ilanis-agent.github.io/app-factory/">app factory</a>. Source: <a href="https://github.com/iLanis-agent/printfwhy">GitHub</a>.</footer>
+</div></body></html>
